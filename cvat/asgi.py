@@ -1,41 +1,32 @@
-# Copyright (C) CVAT.ai Corporation
-#
-# SPDX-License-Identifier: MIT
-
-"""
-ASGI config for CVAT project.
-
-It exposes the ASGI callable as a module-level variable named ``application``.
-
-For more information on this file, see
-https://docs.djangoproject.com/en/3.2/howto/deployment/asgi/
-"""
-
 import os
-
 from django.core.asgi import get_asgi_application
-from django.core.handlers.asgi import ASGIHandler
 
-import cvat.utils.remote_debugger as debug
+# Environment settings load karein
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'cvat.settings.production')
 
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "cvat.settings.development")
+# Standard Django ASGI application initialize karein
+django_asgi_app = get_asgi_application()
 
-application = get_asgi_application()
+# Aapka custom WebSocket application import karne ki koshish
+try:
+    from cvat.apps.test.realtime import websocket_application
+except ImportError:
+    websocket_application = None
 
+async def application(scope, receive, send):
+    """
+    Custom ASGI application handler jo HTTP aur WebSocket dono requests ko route karta hai.
+    """
+    if scope['type'] == 'websocket':
+        if websocket_application and scope['path'].startswith('/ws/'):
+            await websocket_application(scope, receive, send)
+            return
+        # Agar koi aur websocket path ho jo handle nahi karna
+        await send({
+            'type': 'websocket.close',
+            'code': 4004,
+        })
+        return
 
-if debug.is_debugging_enabled():
-
-    class DebuggerApp(ASGIHandler):
-        """
-        Support for VS code debugger
-        """
-
-        def __init__(self) -> None:
-            super().__init__()
-            self.__debugger = debug.RemoteDebugger()
-
-        async def handle(self, *args, **kwargs):
-            self.__debugger.attach_current_thread()
-            return await super().handle(*args, **kwargs)
-
-    application = DebuggerApp()
+    # Baqi saari HTTP/REST requests ke liye standard Django ASGI app
+    await django_asgi_app(scope, receive, send)

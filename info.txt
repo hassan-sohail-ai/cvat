@@ -1,0 +1,179 @@
+]633;E;echo "=== asgi.py";22797ae8-e350-4c96-bd31-9cd9956fd975]633;C=== asgi.py
+# Copyright (C) CVAT.ai Corporation
+#
+# SPDX-License-Identifier: MIT
+
+"""
+ASGI config for CVAT project.
+
+It exposes the ASGI callable as a module-level variable named ``application``.
+
+For more information on this file, see
+https://docs.djangoproject.com/en/3.2/howto/deployment/asgi/
+"""
+
+import os
+
+from django.core.asgi import get_asgi_application
+from django.core.handlers.asgi import ASGIHandler
+
+import cvat.utils.remote_debugger as debug
+
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "cvat.settings.development")
+
+application = get_asgi_application()
+
+
+if debug.is_debugging_enabled():
+
+    class DebuggerApp(ASGIHandler):
+        """
+        Support for VS code debugger
+        """
+
+        def __init__(self) -> None:
+            super().__init__()
+            self.__debugger = debug.RemoteDebugger()
+
+        async def handle(self, *args, **kwargs):
+            self.__debugger.attach_current_thread()
+            return await super().handle(*args, **kwargs)
+
+    application = DebuggerApp()
+=== traefik
+110:        (PathPrefix(`/api/`) || PathPrefix(`/static/`) || PathPrefix(`/admin`)
+111:          || PathPrefix(`/django-rq`))
+=== redis
+342:redis_inmem_host = os.getenv("CVAT_REDIS_INMEM_HOST", "localhost")
+343:redis_inmem_port = os.getenv("CVAT_REDIS_INMEM_PORT", 6379)
+344:redis_inmem_password = os.getenv("CVAT_REDIS_INMEM_PASSWORD", "")
+347:class REDIS_INMEM_DATABASES(IntEnum):
+352:REDIS_INMEM_SETTINGS = {
+=== task.py
+78:def _receive_attributes_from_db(related_manager, foreign_key: str) -> defaultdict[int, list]:
+98:def merge_table_rows(rows, keys_for_merge, field_id):
+127:def _validate_input_annotations(
+1274:def get_job_data(pk, *, streaming: bool = False):
+1283:def put_job_data(pk, data: AnnotationIR | dict, *, db_job: models.Job | None = None):
+1293:def patch_job_data(
+1309:def delete_job_data(pk, *, db_job: models.Job | None = None):
+1315:def export_job(
+1336:def get_task_data(pk):
+1345:def put_task_data(pk, data):
+1354:def patch_task_data(pk, data, action):
+1368:def delete_task_data(pk):
+1374:def export_task(
+1394:def import_task_annotations(
+1421:def import_job_annotations(
+=== pip
+=== container
+ls: cannot access '/home/django/cvat/apps/test': No such file or directory
+=== services
+# Copyright (C) 2026
+# SPDX-License-Identifier: MIT
+"""
+Aggregation layer: turns CVAT's normalised annotation tables into a
+class-wise (label-wise) distribution for a single task.
+"""
+
+from __future__ import annotations
+
+from collections import defaultdict
+from typing import Any
+
+from django.db.models import Count, Q
+
+from cvat.apps.engine.models import (
+    Label,
+    LabeledImage,
+    LabeledShape,
+    Task,
+    TrackedShape,
+)
+
+
+def _labels_of_task(task: Task):
+    condition = Q(task_id=task.id)
+    if task.project_id is not None:
+        condition |= Q(project_id=task.project_id)
+    return Label.objects.filter(condition).order_by("id")
+
+
+def _frame_pairs(task_id: int):
+    yield from LabeledShape.objects.filter(
+        job__segment__task_id=task_id
+    ).values_list("label_id", "frame")
+
+    yield from LabeledImage.objects.filter(
+        job__segment__task_id=task_id
+    ).values_list("label_id", "frame")
+
+    yield from TrackedShape.objects.filter(
+        track__job__segment__task_id=task_id, outside=False
+    ).values_list("track__label_id", "frame")
+
+
+def _annotation_totals(task_id: int) -> dict[int, int]:
+    totals: dict[int, int] = defaultdict(int)
+
+    for row in (
+        LabeledShape.objects.filter(job__segment__task_id=task_id)
+        .values("label_id")
+        .annotate(n=Count("id"))
+    ):
+        totals[row["label_id"]] += row["n"]
+
+    for row in (
+        LabeledImage.objects.filter(job__segment__task_id=task_id)
+        .values("label_id")
+        .annotate(n=Count("id"))
+    ):
+        totals[row["label_id"]] += row["n"]
+
+    for row in (
+        TrackedShape.objects.filter(
+            track__job__segment__task_id=task_id, outside=False
+        )
+        .values("track__label_id")
+        .annotate(n=Count("id"))
+    ):
+        totals[row["track__label_id"]] += row["n"]
+
+    return totals
+
+
+def compute_class_distribution(task_id: int) -> dict[str, Any]:
+    task = Task.objects.select_related("data", "project").get(pk=task_id)
+
+    frames_by_label: dict[int, set[int]] = defaultdict(set)
+    for label_id, frame in _frame_pairs(task_id):
+        frames_by_label[label_id].add(frame)
+
+    totals = _annotation_totals(task_id)
+
+    classes = []
+    annotated_frames: set[int] = set()
+    for label in _labels_of_task(task):
+        frames = frames_by_label.get(label.id, set())
+        annotated_frames |= frames
+        classes.append(
+            {
+                "label_id": label.id,
+                "name": label.name,
+                "color": label.color,
+                "image_count": len(frames),
+                "annotation_count": totals.get(label.id, 0),
+            }
+        )
+
+    classes.sort(key=lambda row: (-row["image_count"], row["name"]))
+
+    total_frames = task.data.size if task.data_id else 0
+    return {
+        "task_id": task.id,
+        "task_name": task.name,
+        "total_frames": total_frames,
+        "annotated_frames": len(annotated_frames),
+        "total_annotations": sum(totals.values()),
+        "classes": classes,
+    }

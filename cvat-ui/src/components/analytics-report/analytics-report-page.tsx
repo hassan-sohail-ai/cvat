@@ -19,6 +19,7 @@ import GoBackButton from 'components/common/go-back-button';
 import CVATLoadingSpinner from 'components/common/loading-spinner';
 import AnalyticsReportContent from './analytics-report-content';
 import AnalyticsPageHeader from './analytics-page-header';
+import { ClassDistributionWidget } from '../class-distribution';
 import { TimePeriod } from '.';
 
 const core = getCore();
@@ -68,12 +69,9 @@ function AnalyticsReportPage(): JSX.Element {
                     [MembershipRole.MAINTAINER, MembershipRole.OWNER].includes(memberships[0].role);
 
                 if (!(user.isSuperuser || isMaintainer)) {
-                    // in an organization only admin and maintainer may export all events
-                    // for others add user filter
                     params.userId = user.id;
                 }
             } else if (!user.isSuperuser) {
-                // in sandbox only admin may export all events, for others add user filter
                 params.userId = user.id;
             }
 
@@ -149,9 +147,6 @@ function AnalyticsReportPage(): JSX.Element {
                                 onExportEvents={onExportEvents}
                                 onUpdateTimePeriod={(from: Date | null, to: Date | null) => {
                                     function localToUTC(date: Date): string {
-                                        // convert local time to UTC string WITHOUT applying any timezone offset
-                                        // the user specified UTC time already in the date picker
-                                        // basically we only convert timezone information
                                         return (
                                             new Date((Number(date) - date.getTimezoneOffset() * 60000)).toISOString()
                                         );
@@ -166,6 +161,7 @@ function AnalyticsReportPage(): JSX.Element {
                         )}
                         { fetching && <CVATLoadingSpinner /> }
                         { resource && <AnalyticsReportContent timePeriod={timePeriod} resource={resource} /> }
+                        { resource instanceof Task && <ClassDistributionWidget taskId={resource.id} /> }
                     </Col>
                 </Row>
             </div>
