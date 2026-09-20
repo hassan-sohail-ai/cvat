@@ -867,3 +867,10 @@ USER_LAST_ACTIVITY_UPDATE_MIN_INTERVAL = timedelta(days=1)
 
 # Health check settings
 HEALTH_CHECK = {"DISK_USAGE_MAX": int(os.getenv("CVAT_HEALTH_DISK_USAGE_MAX", 90))}
+
+
+# Codespaces CSRF fix
+CSRF_TRUSTED_ORIGINS = ['https://*.github.dev', 'https://*.app.github.dev', 'https://localhost:8080', 'http://localhost:8080']
+
+
+INSTALLED_APPS += ['cvat.apps.test']

@@ -28,7 +28,7 @@ UI_URL = "{}://{}".format(UI_SCHEME, UI_HOST)
 if UI_PORT and UI_PORT != "80":
     UI_URL += ":{}".format(UI_PORT)
 
-CSRF_TRUSTED_ORIGINS = [UI_URL]
+CSRF_TRUSTED_ORIGINS = [UI_URL, 'https://*.github.dev', 'https://*.app.github.dev', 'https://localhost:8080', 'http://localhost:8080']
 
 # set UI url to redirect to after successful e-mail confirmation
 ACCOUNT_EMAIL_CONFIRMATION_ANONYMOUS_REDIRECT_URL = "{}/auth/email-confirmation".format(UI_URL)
