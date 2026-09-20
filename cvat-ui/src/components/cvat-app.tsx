@@ -569,7 +569,11 @@ class CVATApplication extends React.PureComponent<CVATAppProps & RouteComponentP
                                         <Route exact path='/tasks/:id' component={TaskPageComponent} />
                                         <Route exact path='/tasks/:tid/quality-control' component={QualityControlPage} />
                                         <Route exact path='/tasks/:tid/analytics' component={AnalyticsReportPage} />
+<<<<<<< HEAD
 <Route exact path='/tasks/:id/class-distribution' component={ClassDistributionPage} />
+=======
+                                        <Route exact path='/tasks/:id/class-distribution' component={ClassDistributionPage} />
+>>>>>>> c6ec5958d (feat: integrate real-time class distribution analytics feature)
                                         <Route exact path='/tasks/:tid/consensus' component={ConsensusManagementPage} />
                                         <Route exact path='/tasks/:id/jobs/create' component={CreateJobPage} />
                                         <Route exact path='/tasks/:id/guide' component={AnnotationGuidePage} />

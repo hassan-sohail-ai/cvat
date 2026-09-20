@@ -134,6 +134,8 @@ INSTALLED_APPS = [
     "health_check.cache",
     "health_check.db",
     "health_check.contrib.psutil",
+    'cvat.apps.cvat_test'
+    'cvat_test',
     "cvat.apps.iam",
     "cvat.apps.dataset_manager",
     "cvat.apps.organizations",

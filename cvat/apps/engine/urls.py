@@ -55,4 +55,7 @@ urlpatterns = [
     path("api/", include("cvat.apps.iam.urls")),
     path("api/", include("cvat.apps.organizations.urls")),
     path("api/", include(router.urls)),
+
+    # Modular inclusion for the custom 'test' app
+    path("api/v1/", include("cvat.apps.test.urls")),
 ]
